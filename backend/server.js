@@ -1,32 +1,56 @@
-// 从环境变量中获取 DEEPSEEK_API_KEY
 require("dotenv").config();
 
+const path = require("path");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// ✅ 添加这一行，让 Express 托管 public 文件夹
-app.use(express.static("public"));
-
-// 路由
 const authRoutes = require("./routes/auth");
 const chatRoutes = require("./routes/chat");
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/DeepSeek";
+
+app.use(cors());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.static(path.join(__dirname, "public")));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 
-app.get("/", (req, res) => {
-    res.sendFile(__dirname + "/public/login.html");
+app.get("/api/health", (req, res) => {
+    res.json({
+        ok: true,
+        database: mongoose.connection.readyState === 1 ? "connected" : "disconnected"
+    });
 });
 
-// 连接 MongoDB
-mongoose.connect("mongodb://localhost:27017/DeepSeek")
-    .then(() => console.log("✅ MongoDB 已连接"))
-    .catch(err => console.log("❌ 连接失败：", err));
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "login.html"));
+});
 
-// 启动服务器
-app.listen(5000, () => console.log("🚀 backend 运行在 http://localhost:5000"));
+app.use((req, res) => {
+    res.status(404).json({ message: "Route not found" });
+});
+
+app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(err.status || 500).json({ message: err.message || "Internal server error" });
+});
+
+async function startServer() {
+    try {
+        await mongoose.connect(MONGODB_URI);
+        console.log("MongoDB connected");
+
+        app.listen(PORT, () => {
+            console.log(`SeekChat backend running at http://localhost:${PORT}`);
+        });
+    } catch (err) {
+        console.error("Failed to start server:", err.message);
+        process.exit(1);
+    }
+}
+
+startServer();

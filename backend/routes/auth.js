@@ -2,17 +2,25 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 
-// 登录验证
-router.post("/login", async (req, res) => {
-  const { username, password } = req.body;
+router.post("/login", async (req, res, next) => {
+    try {
+        const username = String(req.body.username || "").trim();
+        const password = String(req.body.password || "").trim();
 
-  const user = await User.findOne({ username, password });
+        if (!username || !password) {
+            return res.status(400).json({ message: "Username and password are required" });
+        }
 
-  if (!user) {
-    return res.status(401).json({ message: "用户名或密码错误" });
-  }
+        const user = await User.findOne({ username, password }).select("_id username");
 
-  res.json({ message: "登录成功", userId: user._id });
+        if (!user) {
+            return res.status(401).json({ message: "Invalid username or password" });
+        }
+
+        res.json({ message: "Login successful", userId: user._id, username: user.username });
+    } catch (err) {
+        next(err);
+    }
 });
 
 module.exports = router;

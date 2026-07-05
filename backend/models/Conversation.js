@@ -6,9 +6,11 @@ const MessageSchema = new mongoose.Schema({
 }, { _id: false });
 
 const ConversationSchema = new mongoose.Schema({
-    userId: { type: String, required: true },
-    title: { type: String, default: "新对话" },
-    messages: [MessageSchema],
+    userId: { type: String, required: true, trim: true },
+    title: { type: String, default: "New Chat", trim: true },
+    messages: [MessageSchema]
 }, { timestamps: true });
+
+ConversationSchema.index({ userId: 1, updatedAt: -1 });
 
 module.exports = mongoose.model("Conversation", ConversationSchema);

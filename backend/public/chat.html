@@ -1,128 +1,188 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
-    <meta charset="UTF-8"/>
-    <title>DeepSeek Chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeekChat</title>
     <style>
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             display: flex;
             height: 100vh;
             font-family: Arial, sans-serif;
-            background: #fff;
-            color: #000;
+            background: #ffffff;
+            color: #111827;
         }
-
         #sidebar {
-            width: 260px;
-            border-right: 1px solid #ddd;
+            width: 280px;
+            border-right: 1px solid #e5e7eb;
             display: flex;
             flex-direction: column;
+            background: #f9fafb;
         }
-
         #new-chat {
-            padding: 16px;
-            font-weight: bold;
+            margin: 12px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #ffffff;
+            font-weight: 700;
             cursor: pointer;
-            border-bottom: 1px solid #ddd;
+            text-align: left;
         }
-
         #conversation-list {
             flex: 1;
             overflow-y: auto;
+            padding: 0 8px 12px;
         }
-
         .conversation-item {
-            padding: 12px;
+            width: 100%;
+            padding: 10px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
             display: flex;
+            align-items: center;
             justify-content: space-between;
+            gap: 8px;
             cursor: pointer;
+            text-align: left;
         }
-
-        .conversation-item:hover {
-            background: #f2f2f2;
+        .conversation-item:hover,
+        .conversation-item.active {
+            background: #eef2ff;
         }
-
+        .conversation-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .menu-btn {
+            border: 0;
+            background: transparent;
             cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
         }
-
         #chat {
             flex: 1;
+            min-width: 0;
             display: flex;
             flex-direction: column;
         }
-
+        #topbar {
+            min-height: 52px;
+            padding: 12px 18px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #logout {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fff;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
         #messages {
             flex: 1;
             padding: 20px;
             overflow-y: auto;
         }
-
         .msg {
+            max-width: 850px;
             margin-bottom: 14px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
-
-        .user {
-            font-weight: bold;
+        .role {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 700;
+            color: #4b5563;
         }
-
         #input-area {
             display: flex;
-            border-top: 1px solid #ddd;
+            gap: 10px;
+            border-top: 1px solid #e5e7eb;
             padding: 12px;
         }
-
         #input {
             flex: 1;
-            padding: 8px;
+            min-width: 0;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
         }
-
         #send {
-            margin-left: 10px;
-        }
-
-        .menu {
-            position: absolute;
-            background: #fff;
-            border: 1px solid #ccc;
-            display: none;
-            z-index: 100;
-        }
-
-        .menu div {
-            padding: 10px 16px;
+            width: 88px;
+            border: 0;
+            border-radius: 8px;
+            background: #111827;
+            color: #fff;
             cursor: pointer;
         }
-
-        .menu div:hover {
-            background: #eee;
+        #send:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+        .menu {
+            position: absolute;
+            min-width: 120px;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+            display: none;
+            z-index: 100;
+            overflow: hidden;
+        }
+        .menu button {
+            width: 100%;
+            padding: 10px 14px;
+            border: 0;
+            background: #fff;
+            cursor: pointer;
+            text-align: left;
+        }
+        .menu button:hover {
+            background: #f3f4f6;
         }
     </style>
 </head>
 <body>
-
-<div id="sidebar">
-    <div id="new-chat">＋ 新聊天</div>
+<aside id="sidebar">
+    <button id="new-chat" type="button">+ New chat</button>
     <div id="conversation-list"></div>
-</div>
+</aside>
 
-<div id="chat">
+<main id="chat">
+    <header id="topbar">
+        <strong id="chat-title">SeekChat</strong>
+        <button id="logout" type="button">Log out</button>
+    </header>
     <div id="messages"></div>
     <div id="input-area">
-        <input id="input" placeholder="输入消息"/>
-        <button id="send">发送</button>
+        <input id="input" placeholder="Type a message" autocomplete="off">
+        <button id="send" type="button">Send</button>
     </div>
-</div>
+</main>
 
 <div id="menu" class="menu">
-    <div id="pin">置顶</div>
-    <div id="rename">重命名</div>
-    <div id="delete">删除</div>
+    <button id="pin" type="button">Pin</button>
+    <button id="rename" type="button">Rename</button>
+    <button id="delete" type="button">Delete</button>
 </div>
 
 <script>
-    const userId = localStorage.getItem("user_id") || "test-user";
+    const userId = localStorage.getItem("user_id");
+    if (!userId) {
+        window.location.href = "/login.html";
+    }
 
     let currentConversationId = null;
     let conversations = [];
@@ -133,65 +193,79 @@
     const menu = document.getElementById("menu");
     const input = document.getElementById("input");
     const sendBtn = document.getElementById("send");
+    const chatTitle = document.getElementById("chat-title");
+
+    async function fetchJson(url, options) {
+        const res = await fetch(url, options);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Request failed");
+        return data;
+    }
 
     async function loadConversations() {
-        try {
-            const res = await fetch(`/api/chat/conversations/${userId}`);
-            if (!res.ok) throw new Error("获取对话列表失败");
-            conversations = await res.json();
-            renderList();
-        } catch (err) {
-            console.error("加载对话列表失败:", err);
-        }
+        conversations = await fetchJson(`/api/chat/conversations/${userId}`);
+        renderList();
     }
 
     function renderList() {
-        listEl.innerHTML = "";
-        conversations.forEach(c => {
-            const div = document.createElement("div");
-            div.className = "conversation-item";
-            div.innerHTML = `
-                <span>${c.title}</span>
-                <span class="menu-btn">⋮</span>
-            `;
-            div.onclick = e => {
-                if (e.target.classList.contains("menu-btn")) return;
-                loadHistory(c._id);
-            };
-            div.querySelector(".menu-btn").onclick = e => {
-                e.stopPropagation();
-                openMenu(e, c._id);
-            };
-            listEl.appendChild(div);
+        listEl.textContent = "";
+        conversations.forEach(conversation => {
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "conversation-item";
+            if (conversation._id === currentConversationId) row.classList.add("active");
+
+            const title = document.createElement("span");
+            title.className = "conversation-title";
+            title.textContent = conversation.title || "New Chat";
+
+            const menuButton = document.createElement("button");
+            menuButton.type = "button";
+            menuButton.className = "menu-btn";
+            menuButton.textContent = "...";
+            menuButton.title = "Conversation actions";
+
+            row.append(title, menuButton);
+            row.addEventListener("click", () => loadHistory(conversation._id));
+            menuButton.addEventListener("click", event => {
+                event.stopPropagation();
+                openMenu(event, conversation._id);
+            });
+            listEl.appendChild(row);
         });
     }
 
     async function loadHistory(id) {
-        try {
-            currentConversationId = id;
-            messagesEl.innerHTML = "";
+        currentConversationId = id;
+        const conversation = conversations.find(item => item._id === id);
+        chatTitle.textContent = conversation?.title || "SeekChat";
+        messagesEl.textContent = "";
 
-            const res = await fetch(`/api/chat/history/${id}`);
-            if (!res.ok) throw new Error("获取历史消息失败");
-            const data = await res.json();
-
-            if (!Array.isArray(data.messages)) return;
-
-            data.messages.forEach(m => appendMessage(m.role, m.content));
-        } catch (err) {
-            console.error("加载历史消息失败:", err);
+        const data = await fetchJson(`/api/chat/history/${id}`);
+        if (Array.isArray(data.messages)) {
+            data.messages.forEach(message => appendMessage(message.role, message.content));
         }
+        renderList();
+    }
+
+    async function createConversation() {
+        const conversation = await fetchJson("/api/chat/new", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({userId})
+        });
+
+        await loadConversations();
+        await loadHistory(conversation._id);
+        input.focus();
     }
 
     async function sendMessage() {
         const text = input.value.trim();
-        if (!text) {
-            alert("请输入消息内容");
-            return;
-        }
+        if (!text) return;
+
         if (!currentConversationId) {
-            alert("请先点击左侧「＋ 新聊天」创建对话");
-            return;
+            await createConversation();
         }
 
         input.value = "";
@@ -205,16 +279,12 @@
             const res = await fetch("/api/chat/send", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    userId,
-                    conversationId: currentConversationId,
-                    message: text
-                })
+                body: JSON.stringify({ userId, conversationId: currentConversationId, message: text })
             });
 
             if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.message || "发送失败");
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.message || "Failed to send message");
             }
 
             const reader = res.body.getReader();
@@ -230,10 +300,15 @@
                 buffer = parts.pop();
 
                 for (const part of parts) {
+                    if (part.startsWith("event: error")) {
+                        const dataLine = part.split("\n").find(line => line.startsWith("data: "));
+                        throw new Error(dataLine ? JSON.parse(dataLine.slice(6)) : "AI request failed");
+                    }
+
                     if (part.startsWith("data: ")) {
                         const token = part.slice(6);
                         if (token !== "[DONE]") {
-                            aiDiv.textContent += token;
+                            aiDiv.append(document.createTextNode(JSON.parse(token)));
                         }
                     }
                 }
@@ -242,8 +317,7 @@
 
             await loadConversations();
         } catch (err) {
-            console.error("发送消息失败:", err);
-            aiDiv.textContent = "❌ 发送失败: " + err.message;
+            aiDiv.textContent = `Error: ${err.message}`;
         } finally {
             sendBtn.disabled = false;
             input.disabled = false;
@@ -254,89 +328,80 @@
     function appendMessage(role, text) {
         const div = document.createElement("div");
         div.className = "msg";
-        div.innerHTML = `<span class="${role}">${role === "user" ? "你" : "AI"}：</span> ${text}`;
+
+        const label = document.createElement("span");
+        label.className = "role";
+        label.textContent = role === "user" ? "You" : "AI";
+
+        const content = document.createElement("span");
+        content.textContent = text;
+
+        div.append(label, content);
         messagesEl.appendChild(div);
         messagesEl.scrollTop = messagesEl.scrollHeight;
-        return div;
+        return content;
     }
 
-    function openMenu(e, id) {
+    function openMenu(event, id) {
         menuTargetId = id;
-        menu.style.left = e.pageX + "px";
-        menu.style.top = e.pageY + "px";
+        menu.style.left = `${event.pageX}px`;
+        menu.style.top = `${event.pageY}px`;
         menu.style.display = "block";
     }
 
-    document.body.addEventListener("click", e => {
-        if (!menu.contains(e.target) && !e.target.classList.contains("menu-btn")) {
+    document.body.addEventListener("click", event => {
+        if (!menu.contains(event.target) && !event.target.classList.contains("menu-btn")) {
             menu.style.display = "none";
         }
     });
 
-    document.getElementById("delete").onclick = async () => {
-        try {
-            await fetch(`/api/chat/delete/${menuTargetId}`, {method: "DELETE"});
-            loadConversations();
-            messagesEl.innerHTML = "";
-        } catch (err) {
-            console.error("删除对话失败:", err);
+    document.getElementById("delete").addEventListener("click", async () => {
+        await fetchJson(`/api/chat/delete/${menuTargetId}`, {method: "DELETE"});
+        if (menuTargetId === currentConversationId) {
+            currentConversationId = null;
+            messagesEl.textContent = "";
+            chatTitle.textContent = "SeekChat";
         }
-    };
+        menu.style.display = "none";
+        await loadConversations();
+    });
 
-    document.getElementById("rename").onclick = async () => {
-        const title = prompt("新名称");
+    document.getElementById("rename").addEventListener("click", async () => {
+        const title = prompt("New conversation name");
         if (!title) return;
-        try {
-            await fetch(`/api/chat/rename/${menuTargetId}`, {
-                method: "PUT",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({title})
-            });
-            loadConversations();
-        } catch (err) {
-            console.error("重命名失败:", err);
-        }
-    };
+        await fetchJson(`/api/chat/rename/${menuTargetId}`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({title})
+        });
+        menu.style.display = "none";
+        await loadConversations();
+        if (menuTargetId === currentConversationId) chatTitle.textContent = title;
+    });
 
-    document.getElementById("pin").onclick = async () => {
-        try {
-            await fetch(`/api/chat/pin/${menuTargetId}`, {method: "PUT"});
-            loadConversations();
-        } catch (err) {
-            console.error("置顶失败:", err);
-        }
-    };
+    document.getElementById("pin").addEventListener("click", async () => {
+        await fetchJson(`/api/chat/pin/${menuTargetId}`, {method: "PUT"});
+        menu.style.display = "none";
+        await loadConversations();
+    });
 
-    document.getElementById("new-chat").onclick = async () => {
-        console.log("点击新聊天按钮, userId:", userId);
-        try {
-            const res = await fetch("/api/chat/new", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({userId})
-            });
-            console.log("响应状态:", res.status);
-            if (!res.ok) throw new Error("创建对话失败");
-            const conv = await res.json();
-            console.log("创建对话成功:", conv._id);
-            currentConversationId = conv._id;
-            loadConversations();
-            loadHistory(conv._id);
-        } catch (err) {
-            console.error("创建新对话失败:", err);
-            alert("创建对话失败: " + err.message);
-        }
-    };
-
-    sendBtn.onclick = sendMessage;
-    input.onkeydown = e => {
-        if (e.key === "Enter") {
-            e.preventDefault();
+    document.getElementById("new-chat").addEventListener("click", createConversation);
+    document.getElementById("logout").addEventListener("click", () => {
+        localStorage.removeItem("user_id");
+        localStorage.removeItem("username");
+        window.location.href = "/login.html";
+    });
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            event.preventDefault();
             sendMessage();
         }
-    };
+    });
 
-    loadConversations();
+    loadConversations().catch(err => {
+        messagesEl.textContent = `Failed to load conversations: ${err.message}`;
+    });
 </script>
 </body>
 </html>
