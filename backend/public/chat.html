@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8"/>
+    <title>DeepSeek Chat</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #fff;
+            color: #000;
+        }
+
+        #sidebar {
+            width: 260px;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #new-chat {
+            padding: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-bottom: 1px solid #ddd;
+        }
+
+        #conversation-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .conversation-item {
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .conversation-item:hover {
+            background: #f2f2f2;
+        }
+
+        .menu-btn {
+            cursor: pointer;
+        }
+
+        #chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .msg {
+            margin-bottom: 14px;
+        }
+
+        .user {
+            font-weight: bold;
+        }
+
+        #input-area {
+            display: flex;
+            border-top: 1px solid #ddd;
+            padding: 12px;
+        }
+
+        #input {
+            flex: 1;
+            padding: 8px;
+        }
+
+        #send {
+            margin-left: 10px;
+        }
+
+        .menu {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #ccc;
+            display: none;
+            z-index: 100;
+        }
+
+        .menu div {
+            padding: 10px 16px;
+            cursor: pointer;
+        }
+
+        .menu div:hover {
+            background: #eee;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div id="new-chat">＋ 新聊天</div>
+    <div id="conversation-list"></div>
+</div>
+
+<div id="chat">
+    <div id="messages"></div>
+    <div id="input-area">
+        <input id="input" placeholder="输入消息"/>
+        <button id="send">发送</button>
+    </div>
+</div>
+
+<div id="menu" class="menu">
+    <div id="pin">置顶</div>
+    <div id="rename">重命名</div>
+    <div id="delete">删除</div>
+</div>
+
+<script>
+    const userId = localStorage.getItem("user_id") || "test-user";
+
+    let currentConversationId = null;
+    let conversations = [];
+    let menuTargetId = null;
+
+    const listEl = document.getElementById("conversation-list");
+    const messagesEl = document.getElementById("messages");
+    const menu = document.getElementById("menu");
+    const input = document.getElementById("input");
+    const sendBtn = document.getElementById("send");
+
+    async function loadConversations() {
+        try {
+            const res = await fetch(`/api/chat/conversations/${userId}`);
+            if (!res.ok) throw new Error("获取对话列表失败");
+            conversations = await res.json();
+            renderList();
+        } catch (err) {
+            console.error("加载对话列表失败:", err);
+        }
+    }
+
+    function renderList() {
+        listEl.innerHTML = "";
+        conversations.forEach(c => {
+            const div = document.createElement("div");
+            div.className = "conversation-item";
+            div.innerHTML = `
+                <span>${c.title}</span>
+                <span class="menu-btn">⋮</span>
+            `;
+            div.onclick = e => {
+                if (e.target.classList.contains("menu-btn")) return;
+                loadHistory(c._id);
+            };
+            div.querySelector(".menu-btn").onclick = e => {
+                e.stopPropagation();
+                openMenu(e, c._id);
+            };
+            listEl.appendChild(div);
+        });
+    }
+
+    async function loadHistory(id) {
+        try {
+            currentConversationId = id;
+            messagesEl.innerHTML = "";
+
+            const res = await fetch(`/api/chat/history/${id}`);
+            if (!res.ok) throw new Error("获取历史消息失败");
+            const data = await res.json();
+
+            if (!Array.isArray(data.messages)) return;
+
+            data.messages.forEach(m => appendMessage(m.role, m.content));
+        } catch (err) {
+            console.error("加载历史消息失败:", err);
+        }
+    }
+
+    async function sendMessage() {
+        const text = input.value.trim();
+        if (!text) {
+            alert("请输入消息内容");
+            return;
+        }
+        if (!currentConversationId) {
+            alert("请先点击左侧「＋ 新聊天」创建对话");
+            return;
+        }
+
+        input.value = "";
+        sendBtn.disabled = true;
+        input.disabled = true;
+
+        appendMessage("user", text);
+        const aiDiv = appendMessage("assistant", "");
+
+        try {
+            const res = await fetch("/api/chat/send", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    userId,
+                    conversationId: currentConversationId,
+                    message: text
+                })
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || "发送失败");
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, {stream: true});
+                const parts = buffer.split("\n\n");
+                buffer = parts.pop();
+
+                for (const part of parts) {
+                    if (part.startsWith("data: ")) {
+                        const token = part.slice(6);
+                        if (token !== "[DONE]") {
+                            aiDiv.textContent += token;
+                        }
+                    }
+                }
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            await loadConversations();
+        } catch (err) {
+            console.error("发送消息失败:", err);
+            aiDiv.textContent = "❌ 发送失败: " + err.message;
+        } finally {
+            sendBtn.disabled = false;
+            input.disabled = false;
+            input.focus();
+        }
+    }
+
+    function appendMessage(role, text) {
+        const div = document.createElement("div");
+        div.className = "msg";
+        div.innerHTML = `<span class="${role}">${role === "user" ? "你" : "AI"}：</span> ${text}`;
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return div;
+    }
+
+    function openMenu(e, id) {
+        menuTargetId = id;
+        menu.style.left = e.pageX + "px";
+        menu.style.top = e.pageY + "px";
+        menu.style.display = "block";
+    }
+
+    document.body.addEventListener("click", e => {
+        if (!menu.contains(e.target) && !e.target.classList.contains("menu-btn")) {
+            menu.style.display = "none";
+        }
+    });
+
+    document.getElementById("delete").onclick = async () => {
+        try {
+            await fetch(`/api/chat/delete/${menuTargetId}`, {method: "DELETE"});
+            loadConversations();
+            messagesEl.innerHTML = "";
+        } catch (err) {
+            console.error("删除对话失败:", err);
+        }
+    };
+
+    document.getElementById("rename").onclick = async () => {
+        const title = prompt("新名称");
+        if (!title) return;
+        try {
+            await fetch(`/api/chat/rename/${menuTargetId}`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({title})
+            });
+            loadConversations();
+        } catch (err) {
+            console.error("重命名失败:", err);
+        }
+    };
+
+    document.getElementById("pin").onclick = async () => {
+        try {
+            await fetch(`/api/chat/pin/${menuTargetId}`, {method: "PUT"});
+            loadConversations();
+        } catch (err) {
+            console.error("置顶失败:", err);
+        }
+    };
+
+    document.getElementById("new-chat").onclick = async () => {
+        console.log("点击新聊天按钮, userId:", userId);
+        try {
+            const res = await fetch("/api/chat/new", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({userId})
+            });
+            console.log("响应状态:", res.status);
+            if (!res.ok) throw new Error("创建对话失败");
+            const conv = await res.json();
+            console.log("创建对话成功:", conv._id);
+            currentConversationId = conv._id;
+            loadConversations();
+            loadHistory(conv._id);
+        } catch (err) {
+            console.error("创建新对话失败:", err);
+            alert("创建对话失败: " + err.message);
+        }
+    };
+
+    sendBtn.onclick = sendMessage;
+    input.onkeydown = e => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            sendMessage();
+        }
+    };
+
+    loadConversations();
+</script>
+</body>
+</html>

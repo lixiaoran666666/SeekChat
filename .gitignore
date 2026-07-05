@@ -1,0 +1,19 @@
+# dependencies
+**/node_modules/
+
+# environment
+**/.env
+
+# IDE
+.idea/
+.vscode/
+
+# Agent
+.agents/
+
+# logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
